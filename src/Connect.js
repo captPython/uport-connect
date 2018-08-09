@@ -9,14 +9,14 @@ import store from  'store'
 import UportLite from 'uport-lite'
 
 // Initial state for
-const NULL_STATE = {
-  did: null,
-  mnid: null,
-  address: null,
-  doc: null,
-  pushToken: null,
-  publicEncKey: null
-}
+// const NULL_STATE = {
+//   did: null,
+//   mnid: null,
+//   address: null,
+//   doc: null,
+//   pushToken: null,
+//   publicEncKey: null
+// }
 
 class Connect {
   /**
@@ -61,12 +61,12 @@ class Connect {
     this.store = opts.store || new LocalStorageStore()
 
     // Initialize private state
-    this._state = NULL_STATE
+    this._state = {}
 
     // Load any existing state if any
-    if (this.useStore) this.getState()
+    if (this.useStore) this.loadState()
     if (!this.keypair.did) this.keypair = Credentials.createIdentity()
-    if (this.useStore) this.setState()
+    // if (this.useStore) this.setState()
 
     // Transports
     this.PubSub = PubSub
@@ -137,10 +137,9 @@ class Connect {
         }
         return this.verifyResponse(jwt).then(res => {
           // Set identifiers present in the response
-          this.did = res.did
-          if (res.mnid) this.mnid = res.mnid
-          if (res.boxPub) this.publicEncKey = res.boxPub
-          if (res.pushToken) this.pushToken = res.pushToken
+          // TODO maybe just change name in uport-js
+          if (res.boxPub) res.publicEncKey = res.boxPub
+          this.setState(res)
           return {id, res, data: payload.data}
         })
       } else {
@@ -151,22 +150,13 @@ class Connect {
     if (this.onloadResponse && this.onloadResponse.id === id) {
       const onloadResponse = this.onloadResponse
       this.onloadResponse = null
-      if (this.useStore) this.setState()
-      return parseResponse(onloadResponse).then(res => {
-        if (this.useStore) this.setState()
-        return res
-      })
+      return parseResponse(onloadResponse)
     }
 
     return new Promise((resolve, reject) => {
       this.PubSub.subscribe(id, (msg, res) => {
         this.PubSub.unsubscribe(id)
-        parseResponse(res).then(res => {
-          if (this.useStore) this.setState()
-          resolve(res)
-        }, err => {
-          reject(err)
-        })
+        parseResponse(res).then(resolve, reject)
       })
     })
   }
@@ -364,8 +354,9 @@ class Connect {
         this._state = { ...this._state, ...update }
         break
       case 'function':
-        this._state = { ...this._state, ...update(this._state) }
+        this._state = update(this._state)
         break
+        // TODO may want not partially apply, or move this portion to another function
       case 'string':
         this._state = { ...this._state, ...JSON.parse(update) }
         break
@@ -388,24 +379,14 @@ class Connect {
     }
 
     // Write to localStorage
-    if (this.useStore) {
-      this.store.set(this._state)
-    }
+    if (this.useStore) this.store.set(this._state)
   }
 
   /**
    * Load state from local storage and set this instance's state accordingly.
-   * Additionally returns the serialized string for you to manually save the
-   * Connect instance's state somewhere else.
-   *
-   * @returns {String} The serialized connect state
    */
-  getState() {
-    if (this.useStore) {
-      const { address, mnid, did, doc, keypair, pushToken, publicEncKey } = this.store.get()
-      this._state = { address, mnid, did, doc, keypair, pushToken, publicEncKey }
-    }
-    return JSON.stringify(this._state)
+  loadState() {
+    if (this.useStore) this.setState(state => this.store.get())
   }
 
   /**
@@ -414,7 +395,8 @@ class Connect {
    */
   logout() {
     // Clear explicit state
-    this.setState(NULL_STATE)
+    // this.setState(NULL_STATE)
+    this.setState(state => ({keypair: state.keypair}))
     // Clear all instance variables with references to current state
     this.pushTransport = null
   }
@@ -434,6 +416,7 @@ class Connect {
    * Accessor methods for Connect state.  The state consists of the key-value pairs below
    *  (did, doc, mnid, address, keypair, pushToken, and publicEncKey)
    */
+  get state ()        { return this._state }
   get did ()          { return this._state.did }
   get doc ()          { return {...this._state.doc} }
   get mnid ()         { return this._state.mnid }
@@ -445,6 +428,8 @@ class Connect {
   /**
    * Setter methods with appropriate validation
    */
+
+  set state (state)               { this.setState(() => state) }
   set did (did)                   { this.setState({did}) }
   set doc (doc)                   { this.setState({doc}) }
   set mnid (mnid)                 { this.setState({mnid}) }

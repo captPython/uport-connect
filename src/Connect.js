@@ -517,7 +517,7 @@ const connectTransport = (appName) => (uri, {data, cancel}) => {
  * @private
  */
 const pushTransport = (pushToken, publicEncKey) => {
-  const send = transport.push.send(pushToken, publicEncKey)
+  const send = transport.push.sendAndNotify(pushToken, publicEncKey)
 
   return (uri, {message, type, redirectUrl, data}) => {
     if (transport.messageServer.isMessageServerCallback(uri)) {
